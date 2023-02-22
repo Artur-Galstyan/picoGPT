@@ -1,0 +1,7 @@
+dm_haiku==0.0.10.dev0
+haiku==0.01
+jax==0.4.2
+numpy==1.24.1
+optax==0.1.4
+torch==1.13.1
+tqdm==4.64.1
