@@ -12,7 +12,11 @@ import numpy as np
 from datahandler import get_data
 from bigram import get_model
 
-train_dataloader, test_dataloader, vocab_size, encode, decode = get_data()
+from jax.lib import xla_bridge
+
+print("using ", xla_bridge.get_backend().platform)
+
+train_dataloader, test_dataloader, vocab_size, encode, decode = get_data(batch_size=4)
 
 # print(vocab_size)
 bigram_model = get_model(vocab_size)
@@ -38,9 +42,10 @@ cross_entropy_loss = optax.softmax_cross_entropy_with_integer_labels(
 # print(cross_entropy_loss.mean())
 
 
-def generate(idx, max_new_tokens, print_intermediate=False):
+def generate(idx, max_new_tokens, print_intermediate=False, block_size=8):
     rng_key = hk.PRNGSequence(42)
     for _ in range(max_new_tokens):
+        idx = idx[:, -block_size:]
         logits = bigram_model.apply(params, x=idx)
 
         logits = logits[:, -1, :]
