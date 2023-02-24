@@ -45,12 +45,12 @@ cross_entropy_loss = optax.softmax_cross_entropy_with_integer_labels(
 def generate(idx, max_new_tokens, print_intermediate=False, block_size=8):
     rng_key = hk.PRNGSequence(42)
     for _ in range(max_new_tokens):
-        idx = idx[:, -block_size:]
-        logits = bigram_model.apply(params, x=idx)
+        idx_cond = idx[:, -block_size:]
+        logits = bigram_model.apply(params, x=idx_cond)
 
         logits = logits[:, -1, :]
 
-        # probs = jax.nn.softmax(logits, axis=-1)
+        probs = jax.nn.softmax(logits, axis=-1)
 
         # print(idx_next)
         key = next(rng_key)
@@ -68,9 +68,20 @@ text = generate(jnp.zeros((1, 1), dtype=jnp.int32), 100)[0].tolist()
 print(decode(text))
 
 
+def estimate_loss(params):
+    avg_loss = 0
+    for x, y in test_dataloader:
+        x = x.numpy()
+        y = y.numpy()
+        mean_softmax_cross_entropy = loss(params, x, y)
+        avg_loss += mean_softmax_cross_entropy
+    return avg_loss / len(test_dataloader)
+
+
 # generate(dummy_data, 1)
 
 # training the bigram
+
 
 model = lambda params, batch: bigram_model.apply(params, batch)
 
@@ -82,7 +93,9 @@ def loss(params: optax.Params, batch: jnp.ndarray, labels: jnp.ndarray) -> jnp.n
     return loss_value.mean()
 
 
-def fit(params: optax.Params, optim: optax.GradientTransformation) -> optax.Params:
+def fit(
+    params: optax.Params, optim: optax.GradientTransformation, save_model=False
+) -> optax.Params:
     opt_state = optim.init(params)
 
     @jax.jit
@@ -95,10 +108,11 @@ def fit(params: optax.Params, optim: optax.GradientTransformation) -> optax.Para
     for i, (x, y) in tqdm(enumerate(train_dataloader)):
         params, opt_state, loss_value = step(params, opt_state, x.numpy(), y.numpy())
         if i % 25000 == 0:
-            print(f"step {i}, loss: {loss_value}")
-
-    with open("model/model.pkl", "wb") as f:
-        pickle.dump(params, f)
+            validation_loss = estimate_loss(params)
+            print(f"step {i}, loss: {loss_value}, {validation_loss=}")
+    if save_model:
+        with open("model/model.pkl", "wb") as f:
+            pickle.dump(params, f)
 
     return params
 
